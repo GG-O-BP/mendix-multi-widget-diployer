@@ -136,6 +136,12 @@ const App = () => {
     const addAppModal = useModal();
     const removeAppModal = useModal();
 
+    // Animation states
+    const [movingWidgetIndex, setMovingWidgetIndex] = useState(null);
+    const [movingAppIndex, setMovingAppIndex] = useState(null);
+    const [moveDirection, setMoveDirection] = useState(null);
+    const [pulsingButton, setPulsingButton] = useState(null);
+
     // ===== EFFECT COMPOSERS =====
 
     const withStatus = (successMsg, errorPrefix) =>
@@ -203,6 +209,54 @@ const App = () => {
             updatedSettings.selected_widgets[widgetKey],
         );
         await saveSettingsWithStatus(updatedSettings);
+    };
+
+    const moveWidgetUp = async (index) => {
+        if (index === 0) return;
+
+        setPulsingButton(`widget-up-${index}`);
+        setTimeout(() => setPulsingButton(null), 600);
+
+        setMovingWidgetIndex(index);
+        setMoveDirection("up");
+
+        setTimeout(async () => {
+            const newWidgets = [...settings.widgets];
+            [newWidgets[index - 1], newWidgets[index]] = [
+                newWidgets[index],
+                newWidgets[index - 1],
+            ];
+
+            const updatedSettings = { ...settings, widgets: newWidgets };
+            await saveSettingsWithStatus(updatedSettings);
+
+            setMovingWidgetIndex(null);
+            setMoveDirection(null);
+        }, 300);
+    };
+
+    const moveWidgetDown = async (index) => {
+        if (index === settings.widgets.length - 1) return;
+
+        setPulsingButton(`widget-down-${index}`);
+        setTimeout(() => setPulsingButton(null), 600);
+
+        setMovingWidgetIndex(index);
+        setMoveDirection("down");
+
+        setTimeout(async () => {
+            const newWidgets = [...settings.widgets];
+            [newWidgets[index], newWidgets[index + 1]] = [
+                newWidgets[index + 1],
+                newWidgets[index],
+            ];
+
+            const updatedSettings = { ...settings, widgets: newWidgets };
+            await saveSettingsWithStatus(updatedSettings);
+
+            setMovingWidgetIndex(null);
+            setMoveDirection(null);
+        }, 300);
     };
 
     const handleAddWidget = async () => {
@@ -294,6 +348,54 @@ const App = () => {
         );
         const updatedSettings = toggleAppSelection(appKey, settings);
         await saveSettingsWithStatus(updatedSettings);
+    };
+
+    const moveAppUp = async (index) => {
+        if (index === 0) return;
+
+        setPulsingButton(`app-up-${index}`);
+        setTimeout(() => setPulsingButton(null), 600);
+
+        setMovingAppIndex(index);
+        setMoveDirection("up");
+
+        setTimeout(async () => {
+            const newApps = [...settings.apps];
+            [newApps[index - 1], newApps[index]] = [
+                newApps[index],
+                newApps[index - 1],
+            ];
+
+            const updatedSettings = { ...settings, apps: newApps };
+            await saveSettingsWithStatus(updatedSettings);
+
+            setMovingAppIndex(null);
+            setMoveDirection(null);
+        }, 300);
+    };
+
+    const moveAppDown = async (index) => {
+        if (index === settings.apps.length - 1) return;
+
+        setPulsingButton(`app-down-${index}`);
+        setTimeout(() => setPulsingButton(null), 600);
+
+        setMovingAppIndex(index);
+        setMoveDirection("down");
+
+        setTimeout(async () => {
+            const newApps = [...settings.apps];
+            [newApps[index], newApps[index + 1]] = [
+                newApps[index + 1],
+                newApps[index],
+            ];
+
+            const updatedSettings = { ...settings, apps: newApps };
+            await saveSettingsWithStatus(updatedSettings);
+
+            setMovingAppIndex(null);
+            setMoveDirection(null);
+        }, 300);
     };
 
     const handleAddApp = async () => {
@@ -474,8 +576,25 @@ const App = () => {
                 )}
 
                 <div className="widget-list">
-                    {settings.widgets.map((widget) => (
-                        <div key={widget.key} className="widget-item-container">
+                    {settings.widgets.map((widget, index) => (
+                        <div
+                            key={widget.key}
+                            className={`widget-item-container ${
+                                movingWidgetIndex === index
+                                    ? `moving-${moveDirection}`
+                                    : ""
+                            } ${
+                                movingWidgetIndex === index - 1 &&
+                                moveDirection === "down"
+                                    ? "swap-down"
+                                    : ""
+                            } ${
+                                movingWidgetIndex === index + 1 &&
+                                moveDirection === "up"
+                                    ? "swap-up"
+                                    : ""
+                            }`}
+                        >
                             {editingWidget &&
                             editingWidget.key === widget.key ? (
                                 <div className="widget-edit-form">
@@ -554,6 +673,44 @@ const App = () => {
                                         </div>
                                     </label>
                                     <div className="widget-actions">
+                                        <button
+                                            type="button"
+                                            onClick={() => moveWidgetUp(index)}
+                                            className={`order-button ${
+                                                pulsingButton ===
+                                                `widget-up-${index}`
+                                                    ? "pulsing"
+                                                    : ""
+                                            }`}
+                                            disabled={
+                                                index === 0 ||
+                                                movingWidgetIndex !== null
+                                            }
+                                            title="Move up"
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                moveWidgetDown(index)
+                                            }
+                                            className={`order-button ${
+                                                pulsingButton ===
+                                                `widget-down-${index}`
+                                                    ? "pulsing"
+                                                    : ""
+                                            }`}
+                                            disabled={
+                                                index ===
+                                                    settings.widgets.length -
+                                                        1 ||
+                                                movingWidgetIndex !== null
+                                            }
+                                            title="Move down"
+                                        >
+                                            ↓
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() =>
@@ -682,8 +839,25 @@ const App = () => {
                 )}
 
                 <div className="widget-list">
-                    {(settings.apps || []).map((app) => (
-                        <div key={app.key} className="widget-item-container">
+                    {(settings.apps || []).map((app, index) => (
+                        <div
+                            key={app.key}
+                            className={`widget-item-container ${
+                                movingAppIndex === index
+                                    ? `moving-${moveDirection}`
+                                    : ""
+                            } ${
+                                movingAppIndex === index - 1 &&
+                                moveDirection === "down"
+                                    ? "swap-down"
+                                    : ""
+                            } ${
+                                movingAppIndex === index + 1 &&
+                                moveDirection === "up"
+                                    ? "swap-up"
+                                    : ""
+                            }`}
+                        >
                             {editingApp && editingApp.key === app.key ? (
                                 <div className="widget-edit-form">
                                     <div className="form-grid">
@@ -737,7 +911,7 @@ const App = () => {
                                 </div>
                             ) : (
                                 <div className="widget-item">
-                                    <label className="widget-label">
+                                    <label className="widget-checkbox">
                                         <input
                                             type="checkbox"
                                             checked={
@@ -761,6 +935,43 @@ const App = () => {
                                         </div>
                                     </label>
                                     <div className="widget-actions">
+                                        <button
+                                            type="button"
+                                            onClick={() => moveAppUp(index)}
+                                            className={`order-button ${
+                                                pulsingButton ===
+                                                `app-up-${index}`
+                                                    ? "pulsing"
+                                                    : ""
+                                            }`}
+                                            disabled={
+                                                index === 0 ||
+                                                movingAppIndex !== null
+                                            }
+                                            title="Move up"
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => moveAppDown(index)}
+                                            className={`order-button ${
+                                                pulsingButton ===
+                                                `app-down-${index}`
+                                                    ? "pulsing"
+                                                    : ""
+                                            }`}
+                                            disabled={
+                                                index ===
+                                                    (settings.apps || [])
+                                                        .length -
+                                                        1 ||
+                                                movingAppIndex !== null
+                                            }
+                                            title="Move down"
+                                        >
+                                            ↓
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => startEditApp(app)}
