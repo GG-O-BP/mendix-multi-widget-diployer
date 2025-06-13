@@ -140,8 +140,6 @@ mendix-multi-widget-deployer/
 - [x] Korean encoding support
 - [x] PowerShell-based build execution
 - [x] Error handling and user feedback
-- [x] Smooth animated UI
-- [x] Functional programming architecture
 - [ ] Detailed build log viewer
 - [ ] Widget template support
 - [ ] Batch job scheduling
@@ -165,7 +163,6 @@ Application logs are stored in the following location:
 - Follow functional programming principles
 - Write components as pure functions
 - Handle side effects only in custom hooks
-- Prepare for TypeScript migration
 
 ## How to Contribute
 1. Register an issue or check existing issues
