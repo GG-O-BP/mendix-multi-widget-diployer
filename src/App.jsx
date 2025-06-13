@@ -9,7 +9,6 @@ import {
     generateKeyFromName,
     generateUniqueKey,
     createWidget,
-    createApp,
     getSelectedWidgets,
     getSelectedApps,
     getWidgetPaths,
@@ -18,11 +17,9 @@ import {
     validateWidget,
     validateApp,
     hasSelectedWidgets,
-    hasSelectedApps,
     canBuild,
     toggleWidgetSelection,
     toggleAppSelection,
-    updateSettingsField,
 } from "./utils/widgetLogic.js";
 
 // Import effect handlers
@@ -36,7 +33,6 @@ import {
     addAppAPI,
     removeAppAPI,
     updateAppAPI,
-    selectFolderDialog,
     withStatusMessage,
     tapEffect,
     tryCatch,
@@ -152,25 +148,6 @@ const App = () => {
         }
         return result;
     };
-
-    // ===== PATH OPERATIONS =====
-
-    const selectPathAndUpdate = curry(async (field, title) => {
-        const result = await tryCatch(selectFolderDialog, title);
-        if (result.success && result.data) {
-            const updatedSettings = updateSettingsField(
-                field,
-                result.data,
-                settings,
-            );
-            await saveSettingsWithStatus(updatedSettings);
-        }
-    });
-
-    const handlePathChange = curry((field, value) => {
-        const updatedSettings = updateSettingsField(field, value, settings);
-        saveSettingsWithStatus(updatedSettings);
-    });
 
     // ===== BUILD OPERATION =====
 
