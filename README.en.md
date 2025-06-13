@@ -1,6 +1,4 @@
 # Mendix Multi Widget Deployer
-![Mendix Multi Widget Deployer](https://via.placeholder.com/150x150?text=Widget+Deployer)
-
 Mendix Multi Widget Deployment Tool - A desktop application that allows you to build and deploy multiple Mendix widgets at once.
 
 A Tauri-based desktop application designed to help Mendix developers efficiently manage and deploy multiple widgets.

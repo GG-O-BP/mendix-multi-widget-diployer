@@ -1,6 +1,4 @@
 # Mendix Multi Widget Deployer
-![Mendix Multi Widget Deployer](https://via.placeholder.com/150x150?text=Widget+Deployer)
-
 Mendix マルチウィジェット配置ツール - 複数のMendixウィジェットを一度にビルドして配置できるデスクトップアプリケーションです。
 
 Mendix開発者が複数のウィジェットを効率的に管理・配置できるように設計されたTauriベースのデスクトップアプリケーションです。

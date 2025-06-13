@@ -1,6 +1,4 @@
 # Mendix Multi Widget Deployer
-![Mendix Multi Widget Deployer](https://via.placeholder.com/150x150?text=Widget+Deployer)
-
 Mendix 멀티 위젯 배포 도구 - 여러 Mendix 위젯을 한 번에 빌드하고 배포할 수 있는 데스크톱 애플리케이션입니다.
 
 Mendix 개발자들이 여러 위젯을 효율적으로 관리하고 배포할 수 있도록 설계된 Tauri 기반의 데스크톱 애플리케이션입니다.
