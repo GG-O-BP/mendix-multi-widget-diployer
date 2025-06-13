@@ -53,6 +53,9 @@ export const generateUniqueKey = curry((existingKeys, baseName) => {
 // Create a widget object
 export const createWidget = curry((key, name, path) => ({ key, name, path }));
 
+// Create an app object
+export const createApp = curry((key, name, path) => ({ key, name, path }));
+
 // Update a widget in the widgets array
 export const updateWidget = curry((key, name, path, widgets) =>
     map(
@@ -88,6 +91,36 @@ export const widgetKeyExists = curry((key, widgets) =>
     widgets.some((widget) => widget.key === key),
 );
 
+// ===== APP DATA TRANSFORMATIONS =====
+
+// Update an app in the apps array
+export const updateApp = curry((key, name, path, apps) =>
+    map((app) => (app.key === key ? createApp(key, name, path) : app), apps),
+);
+
+// Remove an app from the apps array
+export const removeApp = curry((key, apps) =>
+    filter((app) => app.key !== key, apps),
+);
+
+// Get only selected apps
+export const getSelectedApps = curry((selectedApps, apps) =>
+    filter((app) => selectedApps && selectedApps[app.key] === true, apps),
+);
+
+// Get app paths from apps array
+export const getAppPaths = map(prop("path"));
+
+// Find app by key
+export const findAppByKey = curry((key, apps) =>
+    apps.find((app) => app.key === key),
+);
+
+// Check if app key exists
+export const appKeyExists = curry((key, apps) =>
+    apps.some((app) => app.key === key),
+);
+
 // ===== SETTINGS TRANSFORMATIONS =====
 
 // Update a single field in settings
@@ -101,6 +134,16 @@ export const toggleWidgetSelection = curry((widgetKey, settings) => {
     return assoc(
         "selected_widgets",
         assoc(widgetKey, !currentValue, settings.selected_widgets || {}),
+        settings,
+    );
+});
+
+// Toggle app selection
+export const toggleAppSelection = curry((appKey, settings) => {
+    const currentValue = settings.selected_apps?.[appKey] || false;
+    return assoc(
+        "selected_apps",
+        assoc(appKey, !currentValue, settings.selected_apps || {}),
         settings,
     );
 });
@@ -131,15 +174,47 @@ export const updateWidgetInSettings = curry((key, name, path, settings) => ({
     widgets: updateWidget(key, name, path, settings.widgets),
 }));
 
+// Add a new app to settings
+export const addAppToSettings = curry((app, settings) => ({
+    ...settings,
+    apps: [...(settings.apps || []), app],
+    selected_apps: {
+        ...(settings.selected_apps || {}),
+        [app.key]: false,
+    },
+}));
+
+// Remove an app from settings
+export const removeAppFromSettings = curry((key, settings) => ({
+    ...settings,
+    apps: removeApp(key, settings.apps || []),
+    selected_apps: (() => {
+        const { [key]: _, ...rest } = settings.selected_apps || {};
+        return rest;
+    })(),
+}));
+
+// Update an app in settings
+export const updateAppInSettings = curry((key, name, path, settings) => ({
+    ...settings,
+    apps: updateApp(key, name, path, settings.apps || []),
+}));
+
 // ===== VALIDATION FUNCTIONS =====
 
 // Validate that paths are not empty
 export const validatePaths = (settings) => {
-    if (isEmpty(settings.destination_path)) {
-        return { valid: false, error: "Please specify a destination path" };
+    if (!settings.apps || settings.apps.length === 0) {
+        return { valid: false, error: "Please add at least one Mendix app" };
     }
-    if (isEmpty(settings.base_path)) {
-        return { valid: false, error: "Please specify a base path" };
+    const selectedAppsCount = settings.selected_apps
+        ? Object.values(settings.selected_apps).filter(identity).length
+        : 0;
+    if (selectedAppsCount === 0) {
+        return {
+            valid: false,
+            error: "Please select at least one Mendix app for deployment",
+        };
     }
     return { valid: true };
 };
@@ -155,17 +230,30 @@ export const validateWidget = (widget) => {
     return { valid: true };
 };
 
+// Validate app data
+export const validateApp = (app) => {
+    if (isEmpty(app.name)) {
+        return { valid: false, error: "Name is required for app" };
+    }
+    if (isEmpty(app.path)) {
+        return { valid: false, error: "Path is required for app" };
+    }
+    return { valid: true };
+};
+
 // Check if any widgets are selected
 export const hasSelectedWidgets = (settings) =>
     settings.selected_widgets &&
     Object.values(settings.selected_widgets).some(identity);
 
+// Check if any apps are selected
+export const hasSelectedApps = (settings) =>
+    settings.selected_apps &&
+    Object.values(settings.selected_apps).some(identity);
+
 // Check if build is possible
 export const canBuild = (settings) =>
-    settings &&
-    hasSelectedWidgets(settings) &&
-    isNotEmpty(settings.base_path) &&
-    isNotEmpty(settings.destination_path);
+    settings && hasSelectedWidgets(settings) && hasSelectedApps(settings);
 
 // ===== WIDGET LIST OPERATIONS =====
 

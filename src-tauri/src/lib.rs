@@ -12,11 +12,18 @@ struct Widget {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+struct App {
+    key: String,
+    name: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct AppSettings {
     widgets: Vec<Widget>,
     selected_widgets: std::collections::HashMap<String, bool>,
-    destination_path: String,
-    base_path: String,
+    apps: Vec<App>,
+    selected_apps: std::collections::HashMap<String, bool>,
 }
 
 impl Default for AppSettings {
@@ -24,8 +31,8 @@ impl Default for AppSettings {
         Self {
             widgets: vec![],
             selected_widgets: std::collections::HashMap::new(),
-            destination_path: String::new(),
-            base_path: String::new(),
+            apps: vec![],
+            selected_apps: std::collections::HashMap::new(),
         }
     }
 }
@@ -144,28 +151,83 @@ async fn update_widget(
 }
 
 #[tauri::command]
+async fn add_app(
+    app_handle: tauri::AppHandle,
+    key: String,
+    name: String,
+    path: String,
+) -> Result<AppSettings, String> {
+    let mut settings = load_settings(app_handle.clone()).await?;
+
+    // Check if app key already exists
+    if settings.apps.iter().any(|a| a.key == key) {
+        return Err(format!("App with key '{}' already exists", key));
+    }
+
+    let new_app = App {
+        key: key.clone(),
+        name,
+        path,
+    };
+    settings.apps.push(new_app);
+    settings.selected_apps.insert(key, true);
+
+    save_settings_internal(&app_handle, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+async fn remove_app(app_handle: tauri::AppHandle, key: String) -> Result<AppSettings, String> {
+    let mut settings = load_settings(app_handle.clone()).await?;
+
+    settings.apps.retain(|a| a.key != key);
+    settings.selected_apps.remove(&key);
+
+    save_settings_internal(&app_handle, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+async fn update_app(
+    app_handle: tauri::AppHandle,
+    key: String,
+    name: String,
+    path: String,
+) -> Result<AppSettings, String> {
+    let mut settings = load_settings(app_handle.clone()).await?;
+
+    if let Some(app) = settings.apps.iter_mut().find(|a| a.key == key) {
+        app.name = name;
+        app.path = path;
+        save_settings_internal(&app_handle, &settings)?;
+        Ok(settings)
+    } else {
+        Err(format!("App with key '{}' not found", key))
+    }
+}
+
+#[tauri::command]
 async fn build_widgets(
     widgets: Vec<String>,
-    destination_path: String,
-    base_path: String,
+    destination_apps: Vec<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let base_path = Path::new(&base_path);
-    let dest_path = Path::new(&destination_path);
-
-    // Verify destination path exists
-    if !dest_path.exists() {
-        return Err(format!(
-            "Destination path does not exist: {}",
-            destination_path
-        ));
+    // Verify all destination paths exist
+    for dest_path_str in &destination_apps {
+        let dest_path = Path::new(&dest_path_str);
+        if !dest_path.exists() {
+            return Err(format!(
+                "Destination path does not exist: {}",
+                dest_path_str
+            ));
+        }
     }
 
     let mut success_count = 0;
     let mut errors = Vec::new();
 
     for widget in &widgets {
-        let widget_path = base_path.join(widget);
+        let widget_path = Path::new(widget);
 
         if !widget_path.exists() {
             errors.push(format!(
@@ -180,14 +242,17 @@ async fn build_widgets(
             Ok(output) => {
                 println!("Build output for {}: {}", widget, output);
 
-                // Copy .mpk file
-                match copy_mpk_file(&widget_path, dest_path, widget) {
-                    Ok(copied_file) => {
-                        success_count += 1;
-                        println!("Successfully copied: {}", copied_file);
-                    }
-                    Err(e) => {
-                        errors.push(format!("Failed to copy .mpk for {}: {}", widget, e));
+                // Copy .mpk file to all selected destinations
+                for dest_path_str in &destination_apps {
+                    let dest_path = Path::new(&dest_path_str);
+                    match copy_mpk_file(&widget_path, dest_path, widget) {
+                        Ok(copied_file) => {
+                            success_count += 1;
+                            println!("Successfully copied to {}: {}", dest_path_str, copied_file);
+                        }
+                        Err(e) => {
+                            errors.push(format!("Failed to copy .mpk to {}: {}", dest_path_str, e));
+                        }
                     }
                 }
             }
@@ -199,12 +264,13 @@ async fn build_widgets(
 
     if errors.is_empty() {
         Ok(format!(
-            "Successfully built and deployed {} widget(s)",
-            success_count
+            "Successfully built {} widget(s) and deployed to {} app(s)",
+            widgets.len(),
+            destination_apps.len()
         ))
     } else if success_count > 0 {
         Ok(format!(
-            "Partially successful: {} widget(s) completed, {} failed:\n{}",
+            "Partially successful: {} deployments completed, {} failed:\n{}",
             success_count,
             errors.len(),
             errors.join("\n")
@@ -373,7 +439,10 @@ pub fn run() {
             save_settings,
             add_widget,
             remove_widget,
-            update_widget
+            update_widget,
+            add_app,
+            remove_app,
+            update_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

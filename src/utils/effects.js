@@ -47,8 +47,8 @@ export const saveSettingsAPI = withErrorHandling(
 // Widget operations
 export const buildWidgetsAPI = withErrorHandling(
     "Build failed",
-    ({ widgets, destinationPath, basePath }) =>
-        invoke("build_widgets", { widgets, destinationPath, basePath }),
+    ({ widgets, destinationApps }) =>
+        invoke("build_widgets", { widgets, destinationApps }),
 );
 
 export const addWidgetAPI = withErrorHandling(
@@ -64,6 +64,20 @@ export const removeWidgetAPI = withErrorHandling(
 export const updateWidgetAPI = withErrorHandling(
     "Failed to update widget",
     ({ key, name, path }) => invoke("update_widget", { key, name, path }),
+);
+
+export const addAppAPI = withErrorHandling(
+    "Failed to add app",
+    ({ key, name, path }) => invoke("add_app", { key, name, path }),
+);
+
+export const removeAppAPI = withErrorHandling("Failed to remove app", (key) =>
+    invoke("remove_app", { key }),
+);
+
+export const updateAppAPI = withErrorHandling(
+    "Failed to update app",
+    ({ key, name, path }) => invoke("update_app", { key, name, path }),
 );
 
 // Dialog operations

@@ -9,13 +9,19 @@ import {
     generateKeyFromName,
     generateUniqueKey,
     createWidget,
+    createApp,
     getSelectedWidgets,
+    getSelectedApps,
     getWidgetPaths,
+    getAppPaths,
     validatePaths,
     validateWidget,
+    validateApp,
     hasSelectedWidgets,
+    hasSelectedApps,
     canBuild,
     toggleWidgetSelection,
+    toggleAppSelection,
     updateSettingsField,
 } from "./utils/widgetLogic.js";
 
@@ -27,6 +33,9 @@ import {
     addWidgetAPI,
     removeWidgetAPI,
     updateWidgetAPI,
+    addAppAPI,
+    removeAppAPI,
+    updateAppAPI,
     selectFolderDialog,
     withStatusMessage,
     tapEffect,
@@ -47,6 +56,12 @@ const useSettings = () => {
             const loadedSettings = result.data;
             if (!loadedSettings.selected_widgets) {
                 loadedSettings.selected_widgets = {};
+            }
+            if (!loadedSettings.apps) {
+                loadedSettings.apps = [];
+            }
+            if (!loadedSettings.selected_apps) {
+                loadedSettings.selected_apps = {};
             }
             setSettings(loadedSettings);
             setError(null);
@@ -115,9 +130,15 @@ const App = () => {
     const [editingWidget, setEditingWidget] = useState(null);
     const editingWidgetForm = useWidgetForm();
 
+    const newAppForm = useWidgetForm();
+    const [editingApp, setEditingApp] = useState(null);
+    const editingAppForm = useWidgetForm();
+
     // Modal states
     const addWidgetModal = useModal();
     const removeWidgetModal = useModal();
+    const addAppModal = useModal();
+    const removeAppModal = useModal();
 
     // ===== EFFECT COMPOSERS =====
 
@@ -173,8 +194,10 @@ const App = () => {
                 getSelectedWidgets(settings.selected_widgets),
                 getWidgetPaths,
             )(settings.widgets),
-            destinationPath: trim(settings.destination_path),
-            basePath: trim(settings.base_path),
+            destinationApps: pipe(
+                getSelectedApps(settings.selected_apps),
+                getAppPaths,
+            )(settings.apps || []),
         };
 
         const result = await tryCatch(buildWidgetsAPI, buildData);
@@ -283,6 +306,91 @@ const App = () => {
         editingWidgetForm.reset();
     };
 
+    // ===== APP OPERATIONS =====
+
+    const handleAppToggle = async (appKey) => {
+        console.log(
+            "Toggling app:",
+            appKey,
+            "Current value:",
+            settings.selected_apps[appKey],
+        );
+        const updatedSettings = toggleAppSelection(appKey, settings);
+        await saveSettingsWithStatus(updatedSettings);
+    };
+
+    const handleAddApp = async () => {
+        const validation = validateApp(newAppForm.value);
+        if (!validation.valid) {
+            setBuildStatus(`❌ ${validation.error}`);
+            return;
+        }
+
+        const appKey = generateUniqueKey(
+            map(prop("key"), settings.apps || []),
+            newAppForm.value.name,
+        );
+
+        const addOperation = pipe(
+            withStatus("App added successfully", "Failed to add app"),
+            tapEffect(() => {
+                addAppModal.close();
+                newAppForm.reset();
+            }),
+            tapEffect(updateSettings),
+        );
+
+        await addOperation(addAppAPI)({
+            key: appKey,
+            name: trim(newAppForm.value.name),
+            path: trim(newAppForm.value.path),
+        });
+    };
+
+    const handleRemoveApp = async () => {
+        const removeOperation = pipe(
+            withStatus("App removed successfully", "Failed to remove app"),
+            tapEffect(() => removeAppModal.close()),
+            tapEffect(updateSettings),
+        );
+
+        await removeOperation(removeAppAPI)(removeAppModal.data);
+    };
+
+    const handleUpdateApp = async () => {
+        const validation = validateApp(editingAppForm.value);
+        if (!validation.valid) {
+            setBuildStatus(`❌ ${validation.error}`);
+            return;
+        }
+
+        const updateOperation = pipe(
+            withStatus("App updated successfully", "Failed to update app"),
+            tapEffect(() => {
+                setEditingApp(null);
+                editingAppForm.reset();
+            }),
+            tapEffect(updateSettings),
+        );
+
+        await updateOperation(updateAppAPI)({
+            key: editingApp.key,
+            name: trim(editingAppForm.value.name),
+            path: trim(editingAppForm.value.path),
+        });
+    };
+
+    const startEditApp = (app) => {
+        setEditingApp(app);
+        editingAppForm.updateField("name", app.name);
+        editingAppForm.updateField("path", app.path);
+    };
+
+    const cancelEditApp = () => {
+        setEditingApp(null);
+        editingAppForm.reset();
+    };
+
     // ===== RENDER CONDITIONS =====
 
     if (isLoading) {
@@ -352,9 +460,7 @@ const App = () => {
                                 )}
                             </div>
                             <div className="form-group">
-                                <label>
-                                    Path (relative to packages folder):
-                                </label>
+                                <label>Absolute Path:</label>
                                 <input
                                     type="text"
                                     value={newWidgetForm.value.path}
@@ -364,7 +470,7 @@ const App = () => {
                                             e.target.value,
                                         )
                                     }
-                                    placeholder="e.g., my-custom-widget"
+                                    placeholder="e.g., C:\Users\YourName\Mendix_monorepo\packages\my-custom-widget"
                                 />
                             </div>
                         </div>
@@ -498,58 +604,207 @@ const App = () => {
             </div>
 
             <div className="section">
-                <h2>Base Path (Mendix widget packages)</h2>
-                <div className="path-selector">
-                    <input
-                        type="text"
-                        value={settings.base_path}
-                        onChange={(e) =>
-                            handlePathChange("base_path", e.target.value)
-                        }
-                        onBlur={() => saveSettingsWithStatus(settings)}
-                        placeholder="Enter base path to Mendix widget packages (e.g., C:\Users\YourName\Mendix_monorepo\packages)"
-                        className="path-input"
-                    />
+                <div className="section-header">
+                    <h2>Deploy to Mendix Apps</h2>
                     <button
                         type="button"
-                        onClick={() =>
-                            selectPathAndUpdate(
-                                "base_path",
-                                "Select Mendix widget packages base folder",
-                            )
-                        }
-                        className="browse-button"
+                        onClick={addAppModal.open}
+                        className="add-widget-button"
                     >
-                        Browse
+                        Add App
                     </button>
                 </div>
-            </div>
 
-            <div className="section">
-                <h2>Destination Path</h2>
-                <div className="path-selector">
-                    <input
-                        type="text"
-                        value={settings.destination_path}
-                        onChange={(e) =>
-                            handlePathChange("destination_path", e.target.value)
-                        }
-                        onBlur={() => saveSettingsWithStatus(settings)}
-                        placeholder="Enter destination path for .mpk files"
-                        className="path-input"
-                    />
-                    <button
-                        type="button"
-                        onClick={() =>
-                            selectPathAndUpdate(
-                                "destination_path",
-                                "Select destination folder for .mpk files",
-                            )
-                        }
-                        className="browse-button"
-                    >
-                        Browse
-                    </button>
+                {/* Add App Form */}
+                {addAppModal.isOpen && (
+                    <div className="widget-form">
+                        <h3>Add New App</h3>
+                        <div className="form-grid">
+                            <div className="form-group">
+                                <label>App Name:</label>
+                                <input
+                                    type="text"
+                                    value={newAppForm.value.name}
+                                    onChange={(e) =>
+                                        newAppForm.updateField(
+                                            "name",
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="e.g., My Mendix App"
+                                />
+                                {newAppForm.value.name && (
+                                    <small className="key-preview">
+                                        Key will be:{" "}
+                                        <code>
+                                            {generateKeyFromName(
+                                                newAppForm.value.name,
+                                            )}
+                                        </code>
+                                    </small>
+                                )}
+                            </div>
+                            <div className="form-group">
+                                <label>App Widgets Path:</label>
+                                <input
+                                    type="text"
+                                    value={newAppForm.value.path}
+                                    onChange={(e) =>
+                                        newAppForm.updateField(
+                                            "path",
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="e.g., C:\Users\YourName\Documents\Mendix\MyApp\widgets"
+                                />
+                            </div>
+                        </div>
+                        <div className="form-actions">
+                            <button
+                                type="button"
+                                onClick={handleAddApp}
+                                className="save-button"
+                            >
+                                Add App
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    addAppModal.close();
+                                    newAppForm.reset();
+                                }}
+                                className="cancel-button"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Remove App Confirmation */}
+                {removeAppModal.isOpen && (
+                    <div className="remove-confirmation">
+                        <p>Are you sure you want to remove this app?</p>
+                        <div className="form-actions">
+                            <button
+                                type="button"
+                                onClick={handleRemoveApp}
+                                className="remove-button"
+                            >
+                                Remove
+                            </button>
+                            <button
+                                type="button"
+                                onClick={removeAppModal.close}
+                                className="cancel-button"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="widget-list">
+                    {(settings.apps || []).map((app) => (
+                        <div key={app.key} className="widget-item-container">
+                            {editingApp && editingApp.key === app.key ? (
+                                <div className="widget-edit-form">
+                                    <div className="form-grid">
+                                        <div className="form-group">
+                                            <label>App Name:</label>
+                                            <input
+                                                type="text"
+                                                value={
+                                                    editingAppForm.value.name
+                                                }
+                                                onChange={(e) =>
+                                                    editingAppForm.updateField(
+                                                        "name",
+                                                        e.target.value,
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Path:</label>
+                                            <input
+                                                type="text"
+                                                value={
+                                                    editingAppForm.value.path
+                                                }
+                                                onChange={(e) =>
+                                                    editingAppForm.updateField(
+                                                        "path",
+                                                        e.target.value,
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="form-actions">
+                                        <button
+                                            type="button"
+                                            onClick={handleUpdateApp}
+                                            className="save-button"
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={cancelEditApp}
+                                            className="cancel-button"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="widget-item">
+                                    <label className="widget-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                (settings.selected_apps &&
+                                                    settings.selected_apps[
+                                                        app.key
+                                                    ]) ||
+                                                false
+                                            }
+                                            onChange={() =>
+                                                handleAppToggle(app.key)
+                                            }
+                                        />
+                                        <div className="widget-info">
+                                            <span className="widget-name">
+                                                {app.name}
+                                            </span>
+                                            <span className="widget-path">
+                                                ({app.path})
+                                            </span>
+                                        </div>
+                                    </label>
+                                    <div className="widget-actions">
+                                        <button
+                                            type="button"
+                                            onClick={() => startEditApp(app)}
+                                            className="edit-button"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                removeAppModal.open(app.key)
+                                            }
+                                            className="remove-button"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </div>
 
