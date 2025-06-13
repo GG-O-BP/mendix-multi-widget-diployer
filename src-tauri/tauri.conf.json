@@ -1,0 +1,53 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Mendix Multi Widget Diployer",
+    "version": "0.1.0",
+    "identifier": "com.sbt-global.mendix-multi-widget-diployer",
+    "build": {
+        "beforeDevCommand": "pnpm dev",
+        "devUrl": "http://localhost:1420",
+        "beforeBuildCommand": "pnpm build",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "windows": [
+            {
+                "label": "main",
+                "title": "Mendix Multi Widget Diployer",
+                "width": 900,
+                "height": 1024,
+                "minWidth": 600,
+                "minHeight": 500,
+                "resizable": true
+            }
+        ],
+        "security": {
+            "csp": null,
+            "capabilities": ["main-capability"]
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "windows": {
+            "certificateThumbprint": null,
+            "digestAlgorithm": "sha256",
+            "timestampUrl": null,
+            "wix": {
+                "language": ["en-US", "ko-KR"]
+            }
+        },
+        "publisher": "SBT Global",
+        "copyright": "Copyright © 2024 SBT Global. All rights reserved.",
+        "category": "DeveloperTool",
+        "shortDescription": "Build and deploy Mendix widgets automatically",
+        "longDescription": "Mendix Multi Widget Diployer is a tool for building and deploying Mendix widgets with an intuitive user interface."
+    }
+}
