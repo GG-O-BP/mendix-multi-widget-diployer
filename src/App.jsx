@@ -1,1067 +1,123 @@
-import { useState, useEffect } from "react";
+import React from "react";
 import "./App.css";
 
-// Import functional utilities
-import { pipe, curry, trim, assoc, prop, map } from "./utils/fp.js";
-
-// Import widget business logic
+// Import hooks
 import {
-    generateKeyFromName,
-    generateUniqueKey,
-    createWidget,
-    getSelectedWidgets,
-    getSelectedApps,
-    getWidgetPaths,
-    getAppPaths,
-    validatePaths,
-    validateWidget,
-    validateApp,
-    hasSelectedWidgets,
-    canBuild,
-    toggleWidgetSelection,
-    toggleAppSelection,
-} from "./utils/widgetLogic.js";
+    useSettings,
+    useBuildOperations,
+    useWidgetManagement,
+    useAppManagement,
+} from "./hooks";
 
-// Import effect handlers
+// Import components
 import {
-    loadSettingsAPI,
-    saveSettingsAPI,
-    buildWidgetsAPI,
-    addWidgetAPI,
-    removeWidgetAPI,
-    updateWidgetAPI,
-    addAppAPI,
-    removeAppAPI,
-    updateAppAPI,
-    withStatusMessage,
-    tapEffect,
-    tryCatch,
-} from "./utils/effects.js";
-
-// ===== CUSTOM HOOKS =====
-
-const useSettings = () => {
-    const [settings, setSettings] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    const loadSettings = async () => {
-        const result = await tryCatch(loadSettingsAPI);
-        if (result.success) {
-            // Ensure selected_widgets is initialized
-            const loadedSettings = result.data;
-            if (!loadedSettings.selected_widgets) {
-                loadedSettings.selected_widgets = {};
-            }
-            if (!loadedSettings.apps) {
-                loadedSettings.apps = [];
-            }
-            if (!loadedSettings.selected_apps) {
-                loadedSettings.selected_apps = {};
-            }
-            setSettings(loadedSettings);
-            setError(null);
-        } else {
-            setError(result.error);
-        }
-        setIsLoading(false);
-    };
-
-    const updateSettings = async (updatedSettings) => {
-        console.log("Updating settings:", updatedSettings);
-        const result = await tryCatch(saveSettingsAPI, updatedSettings);
-        if (result.success) {
-            setSettings(updatedSettings);
-            return { success: true };
-        }
-        return { success: false, error: result.error };
-    };
-
-    useEffect(() => {
-        loadSettings();
-    }, []);
-
-    return { settings, isLoading, error, updateSettings };
-};
-
-const useWidgetForm = (initialValue = { name: "", path: "" }) => {
-    const [value, setValue] = useState(initialValue);
-
-    const updateField = curry((field, newValue) => {
-        setValue((current) => assoc(field, newValue, current));
-    });
-
-    const reset = () => setValue(initialValue);
-
-    return { value, updateField, reset };
-};
-
-const useModal = (initialState = false) => {
-    const [isOpen, setIsOpen] = useState(initialState);
-    const [data, setData] = useState(null);
-
-    const open = (modalData = null) => {
-        setData(modalData);
-        setIsOpen(true);
-    };
-
-    const close = () => {
-        setIsOpen(false);
-        setData(null);
-    };
-
-    return { isOpen, data, open, close };
-};
-
-// ===== COMPONENT =====
+    Header,
+    LoadingScreen,
+    ErrorScreen,
+    StatusSection,
+    BuildSection,
+    WidgetList,
+    AppList,
+    ConfirmationModal,
+} from "./components";
 
 const App = () => {
-    // State management
-    const [buildStatus, setBuildStatus] = useState("");
-    const [isBuilding, setIsBuilding] = useState(false);
+    // Core state management
     const { settings, isLoading, error, updateSettings } = useSettings();
-
-    // Form states
-    const newWidgetForm = useWidgetForm();
-    const [editingWidget, setEditingWidget] = useState(null);
-    const editingWidgetForm = useWidgetForm();
-
-    const newAppForm = useWidgetForm();
-    const [editingApp, setEditingApp] = useState(null);
-    const editingAppForm = useWidgetForm();
-
-    // Modal states
-    const addWidgetModal = useModal();
-    const removeWidgetModal = useModal();
-    const addAppModal = useModal();
-    const removeAppModal = useModal();
-
-    // Animation states
-    const [movingWidgetIndex, setMovingWidgetIndex] = useState(null);
-    const [movingAppIndex, setMovingAppIndex] = useState(null);
-    const [moveDirection, setMoveDirection] = useState(null);
-    const [pulsingButton, setPulsingButton] = useState(null);
-
-    // ===== EFFECT COMPOSERS =====
-
-    const withStatus = (successMsg, errorPrefix) =>
-        withStatusMessage(setBuildStatus, successMsg, errorPrefix);
-
-    const saveSettingsWithStatus = async (updatedSettings) => {
-        const result = await updateSettings(updatedSettings);
-        if (!result.success && result.error) {
-            setBuildStatus(`❌ ${result.error}`);
-        }
-        return result;
-    };
-
-    // ===== BUILD OPERATION =====
-
-    const buildWidgets = async () => {
-        const validation = validatePaths(settings);
-        if (!validation.valid) {
-            setBuildStatus(`❌ ${validation.error}`);
-            return;
-        }
-
-        if (!hasSelectedWidgets(settings)) {
-            setBuildStatus("❌ No widgets selected");
-            return;
-        }
-
-        setIsBuilding(true);
-        setBuildStatus("🔄 Starting build process...");
-
-        const buildData = {
-            widgets: pipe(
-                getSelectedWidgets(settings.selected_widgets),
-                getWidgetPaths,
-            )(settings.widgets),
-            destinationApps: pipe(
-                getSelectedApps(settings.selected_apps),
-                getAppPaths,
-            )(settings.apps || []),
-        };
-
-        const result = await tryCatch(buildWidgetsAPI, buildData);
-
-        if (result.success) {
-            setBuildStatus(`✅ ${result.data}`);
-        } else {
-            setBuildStatus(`❌ ${result.error}`);
-        }
-
-        setIsBuilding(false);
-    };
-
-    // ===== WIDGET OPERATIONS =====
-
-    const handleWidgetToggle = async (widgetKey) => {
-        console.log(
-            "Toggling widget:",
-            widgetKey,
-            "Current value:",
-            settings.selected_widgets[widgetKey],
-        );
-        const updatedSettings = toggleWidgetSelection(widgetKey, settings);
-        console.log(
-            "Updated settings after toggle:",
-            updatedSettings.selected_widgets[widgetKey],
-        );
-        await saveSettingsWithStatus(updatedSettings);
-    };
-
-    const moveWidgetUp = async (index) => {
-        if (index === 0) return;
-
-        setPulsingButton(`widget-up-${index}`);
-        setTimeout(() => setPulsingButton(null), 600);
-
-        setMovingWidgetIndex(index);
-        setMoveDirection("up");
-
-        setTimeout(async () => {
-            const newWidgets = [...settings.widgets];
-            [newWidgets[index - 1], newWidgets[index]] = [
-                newWidgets[index],
-                newWidgets[index - 1],
-            ];
-
-            const updatedSettings = { ...settings, widgets: newWidgets };
-            await saveSettingsWithStatus(updatedSettings);
-
-            setMovingWidgetIndex(null);
-            setMoveDirection(null);
-        }, 300);
-    };
-
-    const moveWidgetDown = async (index) => {
-        if (index === settings.widgets.length - 1) return;
-
-        setPulsingButton(`widget-down-${index}`);
-        setTimeout(() => setPulsingButton(null), 600);
-
-        setMovingWidgetIndex(index);
-        setMoveDirection("down");
-
-        setTimeout(async () => {
-            const newWidgets = [...settings.widgets];
-            [newWidgets[index], newWidgets[index + 1]] = [
-                newWidgets[index + 1],
-                newWidgets[index],
-            ];
-
-            const updatedSettings = { ...settings, widgets: newWidgets };
-            await saveSettingsWithStatus(updatedSettings);
-
-            setMovingWidgetIndex(null);
-            setMoveDirection(null);
-        }, 300);
-    };
-
-    const handleAddWidget = async () => {
-        const validation = validateWidget(newWidgetForm.value);
-        if (!validation.valid) {
-            setBuildStatus(`❌ ${validation.error}`);
-            return;
-        }
-
-        const existingKeys = map(prop("key"), settings.widgets);
-        const widget = createWidget(
-            generateUniqueKey(existingKeys, trim(newWidgetForm.value.name)),
-            trim(newWidgetForm.value.name),
-            trim(newWidgetForm.value.path),
-        );
-
-        const addOperation = pipe(
-            withStatus("Widget added successfully", "Failed to add widget"),
-            tapEffect(() => {
-                newWidgetForm.reset();
-                addWidgetModal.close();
-            }),
-            tapEffect(updateSettings),
-        );
-
-        await addOperation(addWidgetAPI)(widget);
-    };
-
-    const handleRemoveWidget = async () => {
-        if (!removeWidgetModal.data) return;
-
-        const removeOperation = pipe(
-            withStatus(
-                "Widget removed successfully",
-                "Failed to remove widget",
-            ),
-            tapEffect(() => removeWidgetModal.close()),
-            tapEffect(updateSettings),
-        );
-
-        await removeOperation(removeWidgetAPI)(removeWidgetModal.data.key);
-    };
-
-    const handleUpdateWidget = async () => {
-        const validation = validateWidget(editingWidgetForm.value);
-        if (!validation.valid) {
-            setBuildStatus(`❌ ${validation.error}`);
-            return;
-        }
-
-        const updateOperation = pipe(
-            withStatus(
-                "Widget updated successfully",
-                "Failed to update widget",
-            ),
-            tapEffect(() => {
-                setEditingWidget(null);
-                editingWidgetForm.reset();
-            }),
-            tapEffect(updateSettings),
-        );
-
-        await updateOperation(updateWidgetAPI)({
-            key: editingWidget.key,
-            name: trim(editingWidgetForm.value.name),
-            path: trim(editingWidgetForm.value.path),
-        });
-    };
-
-    const startEditWidget = (widget) => {
-        setEditingWidget(widget);
-        editingWidgetForm.updateField("name", widget.name);
-        editingWidgetForm.updateField("path", widget.path);
-    };
-
-    const cancelEdit = () => {
-        setEditingWidget(null);
-        editingWidgetForm.reset();
-    };
-
-    // ===== APP OPERATIONS =====
-
-    const handleAppToggle = async (appKey) => {
-        console.log(
-            "Toggling app:",
-            appKey,
-            "Current value:",
-            settings.selected_apps[appKey],
-        );
-        const updatedSettings = toggleAppSelection(appKey, settings);
-        await saveSettingsWithStatus(updatedSettings);
-    };
-
-    const moveAppUp = async (index) => {
-        if (index === 0) return;
-
-        setPulsingButton(`app-up-${index}`);
-        setTimeout(() => setPulsingButton(null), 600);
-
-        setMovingAppIndex(index);
-        setMoveDirection("up");
-
-        setTimeout(async () => {
-            const newApps = [...settings.apps];
-            [newApps[index - 1], newApps[index]] = [
-                newApps[index],
-                newApps[index - 1],
-            ];
-
-            const updatedSettings = { ...settings, apps: newApps };
-            await saveSettingsWithStatus(updatedSettings);
-
-            setMovingAppIndex(null);
-            setMoveDirection(null);
-        }, 300);
-    };
-
-    const moveAppDown = async (index) => {
-        if (index === settings.apps.length - 1) return;
-
-        setPulsingButton(`app-down-${index}`);
-        setTimeout(() => setPulsingButton(null), 600);
-
-        setMovingAppIndex(index);
-        setMoveDirection("down");
-
-        setTimeout(async () => {
-            const newApps = [...settings.apps];
-            [newApps[index], newApps[index + 1]] = [
-                newApps[index + 1],
-                newApps[index],
-            ];
-
-            const updatedSettings = { ...settings, apps: newApps };
-            await saveSettingsWithStatus(updatedSettings);
-
-            setMovingAppIndex(null);
-            setMoveDirection(null);
-        }, 300);
-    };
-
-    const handleAddApp = async () => {
-        const validation = validateApp(newAppForm.value);
-        if (!validation.valid) {
-            setBuildStatus(`❌ ${validation.error}`);
-            return;
-        }
-
-        const appKey = generateUniqueKey(
-            map(prop("key"), settings.apps || []),
-            newAppForm.value.name,
-        );
-
-        const addOperation = pipe(
-            withStatus("App added successfully", "Failed to add app"),
-            tapEffect(() => {
-                addAppModal.close();
-                newAppForm.reset();
-            }),
-            tapEffect(updateSettings),
-        );
-
-        await addOperation(addAppAPI)({
-            key: appKey,
-            name: trim(newAppForm.value.name),
-            path: trim(newAppForm.value.path),
-        });
-    };
-
-    const handleRemoveApp = async () => {
-        const removeOperation = pipe(
-            withStatus("App removed successfully", "Failed to remove app"),
-            tapEffect(() => removeAppModal.close()),
-            tapEffect(updateSettings),
-        );
-
-        await removeOperation(removeAppAPI)(removeAppModal.data);
-    };
-
-    const handleUpdateApp = async () => {
-        const validation = validateApp(editingAppForm.value);
-        if (!validation.valid) {
-            setBuildStatus(`❌ ${validation.error}`);
-            return;
-        }
-
-        const updateOperation = pipe(
-            withStatus("App updated successfully", "Failed to update app"),
-            tapEffect(() => {
-                setEditingApp(null);
-                editingAppForm.reset();
-            }),
-            tapEffect(updateSettings),
-        );
-
-        await updateOperation(updateAppAPI)({
-            key: editingApp.key,
-            name: trim(editingAppForm.value.name),
-            path: trim(editingAppForm.value.path),
-        });
-    };
-
-    const startEditApp = (app) => {
-        setEditingApp(app);
-        editingAppForm.updateField("name", app.name);
-        editingAppForm.updateField("path", app.path);
-    };
-
-    const cancelEditApp = () => {
-        setEditingApp(null);
-        editingAppForm.reset();
-    };
-
-    // ===== RENDER CONDITIONS =====
-
+    const { buildStatus, isBuilding, buildWidgets, setBuildStatus } =
+        useBuildOperations();
+
+    // Widget and App management
+    const widgetManagement = useWidgetManagement(
+        settings || { widgets: [], selected_widgets: {} },
+        updateSettings,
+        setBuildStatus,
+    );
+    const appManagement = useAppManagement(
+        settings || { apps: [], selected_apps: {} },
+        updateSettings,
+        setBuildStatus,
+    );
+
+    // Handle build operation
+    const handleBuild = () => buildWidgets(settings);
+
+    // Render loading state
     if (isLoading) {
-        return (
-            <main className="container">
-                <div className="loading">Loading settings...</div>
-            </main>
-        );
+        return <LoadingScreen message="Loading settings..." />;
     }
 
+    // Render error state
     if (error || !settings) {
-        return (
-            <main className="container">
-                <div className="error">
-                    {error || "Failed to load settings"}
-                </div>
-            </main>
-        );
+        return <ErrorScreen error={error || "Failed to load settings"} />;
     }
 
-    // ===== MAIN RENDER =====
-
+    // Main render
     return (
         <main className="container">
-            <h1>Mendix Multi Widget Diployer</h1>
-            <p>Build and deploy Mendix widgets automatically</p>
+            <Header />
 
-            <div className="section">
-                <div className="section-header">
-                    <h2>Select Widgets to Build</h2>
-                    <button
-                        type="button"
-                        onClick={addWidgetModal.open}
-                        className="add-widget-button"
-                    >
-                        Add Widget
-                    </button>
-                </div>
+            <WidgetList
+                widgets={settings.widgets}
+                selectedWidgets={settings.selected_widgets}
+                widgetManagement={widgetManagement}
+            />
 
-                {/* Add Widget Form */}
-                {addWidgetModal.isOpen && (
-                    <div className="widget-form">
-                        <h3>Add New Widget</h3>
-                        <div className="form-grid">
-                            <div className="form-group">
-                                <label>Display Name:</label>
-                                <input
-                                    type="text"
-                                    value={newWidgetForm.value.name}
-                                    onChange={(e) =>
-                                        newWidgetForm.updateField(
-                                            "name",
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g., My Custom Widget"
-                                />
-                                {newWidgetForm.value.name && (
-                                    <small className="key-preview">
-                                        Key will be:{" "}
-                                        <code>
-                                            {generateKeyFromName(
-                                                newWidgetForm.value.name,
-                                            )}
-                                        </code>
-                                    </small>
-                                )}
-                            </div>
-                            <div className="form-group">
-                                <label>Absolute Path:</label>
-                                <input
-                                    type="text"
-                                    value={newWidgetForm.value.path}
-                                    onChange={(e) =>
-                                        newWidgetForm.updateField(
-                                            "path",
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g., C:\Users\YourName\Mendix_monorepo\packages\my-custom-widget"
-                                />
-                            </div>
-                        </div>
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={handleAddWidget}
-                                className="save-button"
-                            >
-                                Add Widget
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    addWidgetModal.close();
-                                    newWidgetForm.reset();
-                                }}
-                                className="cancel-button"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
+            <AppList
+                apps={settings.apps}
+                selectedApps={settings.selected_apps}
+                appManagement={appManagement}
+            />
 
-                <div className="widget-list">
-                    {settings.widgets.map((widget, index) => (
-                        <div
-                            key={widget.key}
-                            className={`widget-item-container ${
-                                movingWidgetIndex === index
-                                    ? `moving-${moveDirection}`
-                                    : ""
-                            } ${
-                                movingWidgetIndex === index - 1 &&
-                                moveDirection === "down"
-                                    ? "swap-down"
-                                    : ""
-                            } ${
-                                movingWidgetIndex === index + 1 &&
-                                moveDirection === "up"
-                                    ? "swap-up"
-                                    : ""
-                            }`}
-                        >
-                            {editingWidget &&
-                            editingWidget.key === widget.key ? (
-                                <div className="widget-edit-form">
-                                    <div className="form-grid">
-                                        <div className="form-group">
-                                            <label>Display Name:</label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    editingWidgetForm.value.name
-                                                }
-                                                onChange={(e) =>
-                                                    editingWidgetForm.updateField(
-                                                        "name",
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>Path:</label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    editingWidgetForm.value.path
-                                                }
-                                                onChange={(e) =>
-                                                    editingWidgetForm.updateField(
-                                                        "path",
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="form-actions">
-                                        <button
-                                            type="button"
-                                            onClick={handleUpdateWidget}
-                                            className="save-button"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={cancelEdit}
-                                            className="cancel-button"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="widget-item">
-                                    <label className="widget-checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                (settings.selected_widgets &&
-                                                    settings.selected_widgets[
-                                                        widget.key
-                                                    ]) ||
-                                                false
-                                            }
-                                            onChange={() =>
-                                                handleWidgetToggle(widget.key)
-                                            }
-                                        />
-                                        <div className="widget-info">
-                                            <span className="widget-name">
-                                                {widget.name}
-                                            </span>
-                                            <span className="widget-path">
-                                                ({widget.path})
-                                            </span>
-                                        </div>
-                                    </label>
-                                    <div className="widget-actions">
-                                        <button
-                                            type="button"
-                                            onClick={() => moveWidgetUp(index)}
-                                            className={`order-button ${
-                                                pulsingButton ===
-                                                `widget-up-${index}`
-                                                    ? "pulsing"
-                                                    : ""
-                                            }`}
-                                            disabled={
-                                                index === 0 ||
-                                                movingWidgetIndex !== null
-                                            }
-                                            title="Move up"
-                                        >
-                                            ↑
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                moveWidgetDown(index)
-                                            }
-                                            className={`order-button ${
-                                                pulsingButton ===
-                                                `widget-down-${index}`
-                                                    ? "pulsing"
-                                                    : ""
-                                            }`}
-                                            disabled={
-                                                index ===
-                                                    settings.widgets.length -
-                                                        1 ||
-                                                movingWidgetIndex !== null
-                                            }
-                                            title="Move down"
-                                        >
-                                            ↓
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                startEditWidget(widget)
-                                            }
-                                            className="edit-button"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                removeWidgetModal.open(widget)
-                                            }
-                                            className="remove-button"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <BuildSection
+                settings={settings}
+                isBuilding={isBuilding}
+                onBuild={handleBuild}
+            />
 
-            <div className="section">
-                <div className="section-header">
-                    <h2>Deploy to Mendix Apps</h2>
-                    <button
-                        type="button"
-                        onClick={addAppModal.open}
-                        className="add-widget-button"
-                    >
-                        Add App
-                    </button>
-                </div>
+            <StatusSection status={buildStatus} />
 
-                {/* Add App Form */}
-                {addAppModal.isOpen && (
-                    <div className="widget-form">
-                        <h3>Add New App</h3>
-                        <div className="form-grid">
-                            <div className="form-group">
-                                <label>App Name:</label>
-                                <input
-                                    type="text"
-                                    value={newAppForm.value.name}
-                                    onChange={(e) =>
-                                        newAppForm.updateField(
-                                            "name",
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g., My Mendix App"
-                                />
-                                {newAppForm.value.name && (
-                                    <small className="key-preview">
-                                        Key will be:{" "}
-                                        <code>
-                                            {generateKeyFromName(
-                                                newAppForm.value.name,
-                                            )}
-                                        </code>
-                                    </small>
-                                )}
-                            </div>
-                            <div className="form-group">
-                                <label>App Widgets Path:</label>
-                                <input
-                                    type="text"
-                                    value={newAppForm.value.path}
-                                    onChange={(e) =>
-                                        newAppForm.updateField(
-                                            "path",
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="e.g., C:\Users\YourName\Documents\Mendix\MyApp\widgets"
-                                />
-                            </div>
-                        </div>
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={handleAddApp}
-                                className="save-button"
-                            >
-                                Add App
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    addAppModal.close();
-                                    newAppForm.reset();
-                                }}
-                                className="cancel-button"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
+            {/* Widget Removal Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={widgetManagement.removeWidgetModal.isOpen}
+                title="Remove Widget"
+                message="Are you sure you want to remove the following widget?"
+                details={
+                    widgetManagement.removeWidgetModal.data && {
+                        Name: widgetManagement.removeWidgetModal.data.name,
+                        Path: widgetManagement.removeWidgetModal.data.path,
+                    }
+                }
+                warningText="This action cannot be undone."
+                confirmText="Yes, Remove"
+                cancelText="No, Cancel"
+                onConfirm={widgetManagement.handleRemoveWidget}
+                onCancel={widgetManagement.removeWidgetModal.close}
+            />
 
-                {/* Remove App Confirmation */}
-                {removeAppModal.isOpen && (
-                    <div className="remove-confirmation">
-                        <p>Are you sure you want to remove this app?</p>
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={handleRemoveApp}
-                                className="remove-button"
-                            >
-                                Remove
-                            </button>
-                            <button
-                                type="button"
-                                onClick={removeAppModal.close}
-                                className="cancel-button"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div className="widget-list">
-                    {(settings.apps || []).map((app, index) => (
-                        <div
-                            key={app.key}
-                            className={`widget-item-container ${
-                                movingAppIndex === index
-                                    ? `moving-${moveDirection}`
-                                    : ""
-                            } ${
-                                movingAppIndex === index - 1 &&
-                                moveDirection === "down"
-                                    ? "swap-down"
-                                    : ""
-                            } ${
-                                movingAppIndex === index + 1 &&
-                                moveDirection === "up"
-                                    ? "swap-up"
-                                    : ""
-                            }`}
-                        >
-                            {editingApp && editingApp.key === app.key ? (
-                                <div className="widget-edit-form">
-                                    <div className="form-grid">
-                                        <div className="form-group">
-                                            <label>App Name:</label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    editingAppForm.value.name
-                                                }
-                                                onChange={(e) =>
-                                                    editingAppForm.updateField(
-                                                        "name",
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>Path:</label>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    editingAppForm.value.path
-                                                }
-                                                onChange={(e) =>
-                                                    editingAppForm.updateField(
-                                                        "path",
-                                                        e.target.value,
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="form-actions">
-                                        <button
-                                            type="button"
-                                            onClick={handleUpdateApp}
-                                            className="save-button"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={cancelEditApp}
-                                            className="cancel-button"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="widget-item">
-                                    <label className="widget-checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                (settings.selected_apps &&
-                                                    settings.selected_apps[
-                                                        app.key
-                                                    ]) ||
-                                                false
-                                            }
-                                            onChange={() =>
-                                                handleAppToggle(app.key)
-                                            }
-                                        />
-                                        <div className="widget-info">
-                                            <span className="widget-name">
-                                                {app.name}
-                                            </span>
-                                            <span className="widget-path">
-                                                ({app.path})
-                                            </span>
-                                        </div>
-                                    </label>
-                                    <div className="widget-actions">
-                                        <button
-                                            type="button"
-                                            onClick={() => moveAppUp(index)}
-                                            className={`order-button ${
-                                                pulsingButton ===
-                                                `app-up-${index}`
-                                                    ? "pulsing"
-                                                    : ""
-                                            }`}
-                                            disabled={
-                                                index === 0 ||
-                                                movingAppIndex !== null
-                                            }
-                                            title="Move up"
-                                        >
-                                            ↑
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => moveAppDown(index)}
-                                            className={`order-button ${
-                                                pulsingButton ===
-                                                `app-down-${index}`
-                                                    ? "pulsing"
-                                                    : ""
-                                            }`}
-                                            disabled={
-                                                index ===
-                                                    (settings.apps || [])
-                                                        .length -
-                                                        1 ||
-                                                movingAppIndex !== null
-                                            }
-                                            title="Move down"
-                                        >
-                                            ↓
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => startEditApp(app)}
-                                            className="edit-button"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                removeAppModal.open(app.key)
-                                            }
-                                            className="remove-button"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="section">
-                <button
-                    onClick={buildWidgets}
-                    disabled={isBuilding || !canBuild(settings)}
-                    className="build-button"
-                >
-                    {isBuilding ? "Building..." : "Build & Deploy Widgets"}
-                </button>
-            </div>
-
-            {buildStatus && (
-                <div className="status-section">
-                    <h3>Build Status</h3>
-                    <div
-                        className="status-message"
-                        style={{
-                            whiteSpace: "pre-wrap",
-                            fontFamily: "monospace",
-                        }}
-                    >
-                        {buildStatus}
-                    </div>
-                </div>
-            )}
-
-            {/* Remove Widget Confirmation Modal */}
-            {removeWidgetModal.isOpen && removeWidgetModal.data && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <h3>Remove Widget</h3>
-                        <p>
-                            Are you sure you want to remove the following
-                            widget?
-                        </p>
-                        <div className="widget-details">
-                            <div>
-                                <strong>Name:</strong>{" "}
-                                {removeWidgetModal.data.name}
-                            </div>
-                            <div>
-                                <strong>Path:</strong>{" "}
-                                {removeWidgetModal.data.path}
-                            </div>
-                        </div>
-                        <p className="warning-text">
-                            This action cannot be undone.
-                        </p>
-                        <div className="modal-actions">
-                            <button
-                                type="button"
-                                onClick={handleRemoveWidget}
-                                className="confirm-button"
-                            >
-                                Yes, Remove
-                            </button>
-                            <button
-                                type="button"
-                                onClick={removeWidgetModal.close}
-                                className="cancel-button"
-                            >
-                                No, Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* App Removal Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={appManagement.removeAppModal.isOpen}
+                title="Remove App"
+                message="Are you sure you want to remove the following app?"
+                details={
+                    appManagement.removeAppModal.data && {
+                        Name: settings.apps?.find(
+                            (app) =>
+                                app.key === appManagement.removeAppModal.data,
+                        )?.name,
+                        Path: settings.apps?.find(
+                            (app) =>
+                                app.key === appManagement.removeAppModal.data,
+                        )?.path,
+                    }
+                }
+                warningText="This action cannot be undone."
+                confirmText="Yes, Remove"
+                cancelText="No, Cancel"
+                onConfirm={appManagement.handleRemoveApp}
+                onCancel={appManagement.removeAppModal.close}
+            />
         </main>
     );
 };
