@@ -43,7 +43,7 @@ export const AppList = ({ apps, selectedApps, appManagement }) => {
                     }}
                     submitLabel="Add App"
                     showKeyPreview={true}
-                    urlPlaceholder="e.g., C:\Users\YourName\Mendix\my-app\widgets"
+                    pathPlaceholder="e.g., C:\Users\YourName\Mendix\my-app\widgets"
                 />
             )}
 

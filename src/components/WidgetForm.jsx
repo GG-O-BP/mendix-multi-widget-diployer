@@ -8,7 +8,7 @@ export const WidgetForm = ({
     onCancel,
     submitLabel = "Save",
     showKeyPreview = false,
-    urlPlaceholder = "",
+    pathPlaceholder = "",
 }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -48,7 +48,7 @@ export const WidgetForm = ({
                             onChange={(e) =>
                                 form.updateField("path", e.target.value)
                             }
-                            placeholder={urlPlaceholder}
+                            placeholder={pathPlaceholder}
                         />
                     </div>
                 </div>

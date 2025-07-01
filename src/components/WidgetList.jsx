@@ -43,7 +43,7 @@ export const WidgetList = ({ widgets, selectedWidgets, widgetManagement }) => {
                     }}
                     submitLabel="Add Widget"
                     showKeyPreview={true}
-                    urlPlaceholder="e.g., C:\Users\YourName\Mendix_monorepo\packages\my-custom-widget"
+                    pathPlaceholder="e.g., C:\Users\YourName\Mendix_monorepo\packages\my-custom-widget"
                 />
             )}
 
