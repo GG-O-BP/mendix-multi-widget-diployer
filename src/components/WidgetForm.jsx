@@ -8,6 +8,7 @@ export const WidgetForm = ({
     onCancel,
     submitLabel = "Save",
     showKeyPreview = false,
+    urlPlaceholder = "",
 }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -24,14 +25,18 @@ export const WidgetForm = ({
                         <input
                             type="text"
                             value={form.value.name}
-                            onChange={(e) => form.updateField("name", e.target.value)}
+                            onChange={(e) =>
+                                form.updateField("name", e.target.value)
+                            }
                             placeholder="e.g., My Custom Widget"
                             autoFocus
                         />
                         {showKeyPreview && form.value.name && (
                             <small className="key-preview">
                                 Key will be:{" "}
-                                <code>{generateKeyFromName(form.value.name)}</code>
+                                <code>
+                                    {generateKeyFromName(form.value.name)}
+                                </code>
                             </small>
                         )}
                     </div>
@@ -40,8 +45,10 @@ export const WidgetForm = ({
                         <input
                             type="text"
                             value={form.value.path}
-                            onChange={(e) => form.updateField("path", e.target.value)}
-                            placeholder="e.g., C:\Users\YourName\Mendix_monorepo\packages\my-custom-widget"
+                            onChange={(e) =>
+                                form.updateField("path", e.target.value)
+                            }
+                            placeholder={urlPlaceholder}
                         />
                     </div>
                 </div>
@@ -49,7 +56,11 @@ export const WidgetForm = ({
                     <button type="submit" className="save-button">
                         {submitLabel}
                     </button>
-                    <button type="button" onClick={onCancel} className="cancel-button">
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="cancel-button"
+                    >
                         Cancel
                     </button>
                 </div>

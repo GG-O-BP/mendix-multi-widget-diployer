@@ -2,11 +2,7 @@ import React from "react";
 import { WidgetItem } from "./WidgetItem.jsx";
 import { WidgetForm } from "./WidgetForm.jsx";
 
-export const AppList = ({
-    apps,
-    selectedApps,
-    appManagement,
-}) => {
+export const AppList = ({ apps, selectedApps, appManagement }) => {
     const {
         editingApp,
         newAppForm,
@@ -47,6 +43,7 @@ export const AppList = ({
                     }}
                     submitLabel="Add App"
                     showKeyPreview={true}
+                    urlPlaceholder="e.g., C:\Users\YourName\Mendix\my-app\widgets"
                 />
             )}
 
@@ -62,9 +59,15 @@ export const AppList = ({
                             isSelected={selectedApps?.[app.key] || false}
                             isEditing={editingApp?.key === app.key}
                             editForm={editingAppForm}
-                            animationClass={appAnimation.getItemClassName(index)}
-                            upButtonClass={appAnimation.getButtonClassName(`app-up-${index}`)}
-                            downButtonClass={appAnimation.getButtonClassName(`app-down-${index}`)}
+                            animationClass={appAnimation.getItemClassName(
+                                index,
+                            )}
+                            upButtonClass={appAnimation.getButtonClassName(
+                                `app-up-${index}`,
+                            )}
+                            downButtonClass={appAnimation.getButtonClassName(
+                                `app-down-${index}`,
+                            )}
                             isFirstItem={index === 0}
                             isLastItem={index === (apps || []).length - 1}
                             isAnimating={appAnimation.isAnimating()}
@@ -72,7 +75,9 @@ export const AppList = ({
                             onMoveUp={moveAppUp}
                             onMoveDown={moveAppDown}
                             onEdit={startEditApp}
-                            onRemove={(app) => appManagement.removeAppModal.open(app.key)}
+                            onRemove={(app) =>
+                                appManagement.removeAppModal.open(app.key)
+                            }
                             onUpdate={handleUpdateApp}
                             onCancelEdit={cancelEditApp}
                         />

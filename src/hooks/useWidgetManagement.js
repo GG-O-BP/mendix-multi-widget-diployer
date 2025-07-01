@@ -177,7 +177,7 @@ export const useWidgetManagement = (
             tapEffect(updateSettings),
         );
 
-        await removeOperation(removeWidgetAPI)(removeWidgetModal.data);
+        await removeOperation(removeWidgetAPI)(removeWidgetModal.data.key);
     }, [removeWidgetModal, withStatus, updateSettings]);
 
     // Update widget
